@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { playSound } from './sound';
 
 export default function MapScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
@@ -55,6 +56,7 @@ export default function MapScreen() {
     })();
   }, []);
 
+
   // Agregar un marcador al tocar el mapa
   const handleMapPress = (event: any) => {
     const { latitude, longitude } = event.nativeEvent.coordinate;
@@ -82,6 +84,58 @@ export default function MapScreen() {
     );
   };
 
+  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; // Radio de la Tierra en metros
+    const rad = Math.PI / 180;
+    const dLat = (lat2 - lat1) * rad;
+    const dLon = (lon2 - lon1) * rad;
+  
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * rad) * Math.cos(lat2 * rad) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distancia en metros
+  };
+  const checkProximity = (
+    userLocation: { latitude: number; longitude: number; }, 
+    markers: { latitude: number; longitude: number; id: number; }[]
+) => {
+    markers.forEach(marker => {
+      const distance = getDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        marker.latitude,
+        marker.longitude
+      );
+      
+      if (distance < 10) {
+        console.log(`Distancia al marcador ${marker.id}: ${distance} metros. Reproduciendo sonido.`);
+        // Si ya hay un intervalo activo para este marcador, ajustarlo
+        playSound();
+     }
+    });
+  };
+  
+  useEffect(() => {
+    let locationSubscription: { remove: any; };
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        console.error("Permiso de ubicación denegado");
+        return;
+      }
+  
+      locationSubscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
+        (location) => checkProximity(location.coords, markers)
+      );
+    })();
+  
+    return () => locationSubscription && locationSubscription.remove();
+  }, [markers]);
+
   return (
     <View style={styles.container}>
       {region && (
@@ -104,7 +158,9 @@ export default function MapScreen() {
               coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
               title="Obstáculo"
               description={`Lat: ${marker.latitude.toFixed(5)}, Lon: ${marker.longitude.toFixed(5)}`}
+              pinColor="purple"
               onPress={() => handleMarkerPress(marker.id)} // Al presionar, eliminar marcador
+              
             />
           ))}
         </MapView>

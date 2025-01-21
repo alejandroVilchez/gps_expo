@@ -1,41 +1,31 @@
-import { useEffect, useState } from 'react';
-import { View, StyleSheet, Button } from 'react-native';
+// import { useEffect, useState } from 'react';
+// import { View, StyleSheet, Button } from 'react-native';
+// import { Audio, AVPlaybackSource } from 'expo-av';
+
 import { Audio } from 'expo-av';
 
-export default function Sound() {
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-
-  async function playSound() {
-    console.log('Loading Sound');
-    const { sound } = await Audio.Sound.createAsync( require('../assets/sound.mp3')
-    );
-    setSound(sound);
-
-    console.log('Playing Sound');
+export const playSound = async () => {
+  let sound: Audio.Sound | null = null;
+  
+  try {
+    const { sound: loadedSound } = await Audio.Sound.createAsync(require('../assets/snap.mp3'));
+    sound = loadedSound;
     await sound.playAsync();
+  
+    // Descargar el sonido después de que termine de reproducirse
+    sound.setOnPlaybackStatusUpdate(async (status) => {
+      if (status.isLoaded && status.didJustFinish) {
+        await sound?.unloadAsync();
+        sound = null;
+      }
+    });
+  } catch (error) {
+    console.error('Error al reproducir el sonido:', error);
+    // Descargar cualquier recurso si ocurre un error
+    if (sound) {
+      await sound.unloadAsync();
+      sound = null;
+    }
   }
-
-  useEffect(() => {
-    return sound
-      ? () => {
-          console.log('Unloading Sound');
-          sound.unloadAsync();
-        }
-      : undefined;
-  }, [sound]);
-
-  return (
-    <View style={styles.container}>
-      <Button title="Play Sound" onPress={playSound} />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    backgroundColor: '#ecf0f1',
-    padding: 10,
-  },
-});
+};
+  

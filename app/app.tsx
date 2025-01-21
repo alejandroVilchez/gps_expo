@@ -6,7 +6,7 @@ export default function App() {
 
     return (
         <View style={styles.container}>
-            <Button title="Ver Mapa" onPress={() => router.push('/mapScreen')} />
+            <Button title="Ver Mapa" onPress={() => router.push('./mapScreen')} />
         </View>
     )
 }

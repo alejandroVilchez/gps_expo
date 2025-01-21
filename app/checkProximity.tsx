@@ -1,6 +1,3 @@
-// import * as Location from "expo-location";
-// import Sound from './sound';
-
 
 // const checkProximity = async (userLocation, markers) => {
 //   markers.forEach((marker) => {

@@ -1,4 +1,5 @@
 // import { Accelerometer } from 'expo-sensors';
+// import { AccelerometerSensor } from 'expo-sensors/build/Accelerometer';
 // import { useState, useEffect } from 'react';
 // import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
   
@@ -8,7 +9,7 @@
 //       y: 0,
 //       z: 0,
 //     });
-  
+
 //     const [subscription, setSubscription] = useState<Accelerometer.Subscription | undefined>(undefined);
   
 //     const _slow = () => Accelerometer.setUpdateInterval(1000);
