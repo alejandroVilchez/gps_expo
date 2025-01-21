@@ -8,6 +8,13 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
    ```bash
    npm install
+   npm install expo-location
+   npm install expo-av
+   npm install expo-sensors
+   npx expo install react-native-maps
+   npx expo install @react-native-async-storage/async-storage
+   npx expo install @react-navigation/stack
+
    ```
 
 2. Start the app
