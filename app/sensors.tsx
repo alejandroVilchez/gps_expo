@@ -1,81 +1,44 @@
-// import { Accelerometer } from 'expo-sensors';
-// import { AccelerometerSensor } from 'expo-sensors/build/Accelerometer';
-// import { useState, useEffect } from 'react';
-// import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-  
-// export default function App() {
-//     const [{ x, y, z }, setData] = useState({
-//       x: 0,
-//       y: 0,
-//       z: 0,
-//     });
+import { Accelerometer, Gyroscope, Magnetometer } from "expo-sensors";
+import { useState, useEffect, useRef } from "react";
+import { View, Text } from "react-native";
+import { playSound } from "./sound";
 
-//     const [subscription, setSubscription] = useState<Accelerometer.Subscription | undefined>(undefined);
+export default function Sensors() {
+    const [accelData, setAccelData] = useState({ x: 0, y: 0, z: 0 });
+    const [gyroData, setGyroData] = useState({ x: 0, y: 0, z: 0 });
+    const [magData, setMagData] = useState({ x: 0, y: 0, z: 0 });
+    const [roll, setRoll] = useState(0);
+    const lastRoll = useRef(0); // Almacena el último roll registrado
+    const THRESHOLD = 10; // Umbral en grados para activar sonido
+    const activationDelay = 5; // retardo de activación
+
+    useEffect(() => {
+      Accelerometer.setUpdateInterval(200); // Reducimos frecuencia de actualización
   
-//     const _slow = () => Accelerometer.setUpdateInterval(1000);
-//     const _fast = () => Accelerometer.setUpdateInterval(16);
+      const accelSub = Accelerometer.addListener((data) => {
+        setAccelData(data);
+        const newRoll = Math.atan2(data.y, Math.sqrt(data.x * data.x + data.z * data.z)) * (180 / Math.PI);
   
-//     const _subscribe = () => {
-//       const listener = Accelerometer.addListener(setData);
-//       setSubscription(listener);
-//     };
+        setRoll(newRoll);
   
-//     const _unsubscribe = () => {
-//       subscription && subscription.remove();
-//       setSubscription(undefined);
-//     };
+        // Filtro de histéresis: evita activar sonido en cada fluctuación mínima
+        if (Math.abs(newRoll) > THRESHOLD && Math.abs(newRoll - lastRoll.current) > activationDelay ) {
+          playSound();
+          lastRoll.current = newRoll; // Actualizar último roll registrado
+        }
+      });
   
-//     useEffect(() => {
-//       _subscribe();
-//       return () => _unsubscribe();
-//     }, []);
-  
-//     return (
-//       <View style={styles.container}>
-//         <Text style={styles.text}>Accelerometer: (in gs where 1g = 9.81 m/s^2)</Text>
-//         <Text style={styles.text}>x: {x}</Text>
-//         <Text style={styles.text}>y: {y}</Text>
-//         <Text style={styles.text}>z: {z}</Text>
-//         <View style={styles.buttonContainer}>
-//           <TouchableOpacity onPress={subscription ? _unsubscribe : _subscribe} style={styles.button}>
-//             <Text>{subscription ? 'On' : 'Off'}</Text>
-//           </TouchableOpacity>
-//           <TouchableOpacity onPress={_slow} style={[styles.button, styles.middleButton]}>
-//             <Text>Slow</Text>
-//           </TouchableOpacity>
-//           <TouchableOpacity onPress={_fast} style={styles.button}>
-//             <Text>Fast</Text>
-//           </TouchableOpacity>
-//         </View>
-//       </View>
-//     );
-// }
-  
-//   const styles = StyleSheet.create({
-//     container: {
-//       flex: 1,
-//       justifyContent: 'center',
-//       paddingHorizontal: 20,
-//     },
-//     text: {
-//       textAlign: 'center',
-//     },
-//     buttonContainer: {
-//       flexDirection: 'row',
-//       alignItems: 'stretch',
-//       marginTop: 15,
-//     },
-//     button: {
-//       flex: 1,
-//       justifyContent: 'center',
-//       alignItems: 'center',
-//       backgroundColor: '#eee',
-//       padding: 10,
-//     },
-//     middleButton: {
-//       borderLeftWidth: 1,
-//       borderRightWidth: 1,
-//       borderColor: '#ccc',
-//     },
-//   });
-  
+      return () => {
+        accelSub.remove();
+      };
+    }, []);
+
+    return (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <Text>Acelerómetro: X {accelData.x.toFixed(2)}, Y {accelData.y.toFixed(2)}, Z {accelData.z.toFixed(2)}</Text>
+        <Text>Giroscopio: X {gyroData.x.toFixed(2)}, Y {gyroData.y.toFixed(2)}, Z {gyroData.z.toFixed(2)}</Text>
+        <Text>Magnetómetro: X {magData.x.toFixed(2)}, Y {magData.y.toFixed(2)}, Z {magData.z.toFixed(2)}</Text>
+        <Text>Roll (Acelerómetro): {roll.toFixed(2)}°</Text>
+        </View>
+    );
+}
