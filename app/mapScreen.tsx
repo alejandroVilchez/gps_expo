@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { Text, View, StyleSheet, Alert } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button, Dialog, Portal, RadioButton } from "react-native-paper";
-import { playSound } from '../components/sound';
-import { useOrientation } from './sensors'; // Importa el hook de orientación
+import useSensors from './sensors'; 
+import { audioManager } from '../components/audioManager';
+import { calculateClockOrientation, calculateBearing } from '../utils/orientationUtils';
+
 
 
 const OBSTACLE_TYPES = {
@@ -14,14 +16,28 @@ const OBSTACLE_TYPES = {
   beach: { label: "Playa (punto de partida)", color: "green" },
 };
 
+// configuración de proximidad
+const OBSTACLE_CONFIG = {
+  maxDistance: 100,
+  minVolume: 0.3,
+  maxVolume: 1.0,
+  minDelay: 300,
+  maxDelay: 2500
+};
+
+const BEACH_CONFIG = {
+  updateInterval: 6000,
+  maxAudioDistance: 500
+};
+
 export default function MapScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [region, setRegion] = useState<Region | null>(null);
 
-  //const [heading, setHeading] = useState<number | null>(null);
-  const orientation = useOrientation(); 
-
-
+  const [heading, setHeading] = useState<number | null>(null);
+  //const sensors = useSensors();
+  const { roll } = useSensors();
+  
   const [markers, setMarkers] = useState<{ latitude: number; longitude: number; id: number, type: keyof typeof OBSTACLE_TYPES }[]>([]);
   const [selectedMarker, setSelectedMarker] = useState<number | null>(null);
 
@@ -29,6 +45,20 @@ export default function MapScreen() {
   const [selectedType, setSelectedType] = useState<keyof typeof OBSTACLE_TYPES>("boat");
   const [newMarker, setNewMarker] = useState<{ latitude: number; longitude: number } | null>(null);
   
+
+  const beachFeedbackInterval = useRef<NodeJS.Timeout | null>(null);
+  const proximityCheckTimeout = useRef<NodeJS.Timeout | null>(null);
+
+
+  // cargar sonidos
+  useEffect(() => {
+    audioManager.loadAllSounds();
+
+    return () => {
+      audioManager.unloadAll();
+    }
+  }, []);
+
 
   // Cargar marcadores guardados al iniciar
   useEffect(() => {
@@ -47,7 +77,6 @@ export default function MapScreen() {
   }, []);
 
   // Guardar marcadores en AsyncStorage
-  //const saveMarkers = async (newMarkers: { latitude: number; longitude: number; id: number }[]) => {
   const saveMarkers = async (newMarkers: typeof markers) => {
     try {
       await AsyncStorage.setItem('markers', JSON.stringify(newMarkers));
@@ -56,7 +85,7 @@ export default function MapScreen() {
     }
   };
 
-  // Obtener ubicación del usuario
+  // Obtener ubicación y orientación (heading) del usuario
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -75,14 +104,24 @@ export default function MapScreen() {
         longitudeDelta: 0.01,
       });
 
-      // let headingSubscription = await Location.watchHeadingAsync((data) => {
-      // setHeading(data.trueHeading);
-      // });
+      let lastOrientation = 12;
 
-      // return () => headingSubscription.remove(); // Limpiar suscripción
+      let headingSubscription = await Location.watchHeadingAsync((data) => {
+        if(data.trueHeading){
+          const newOrientation = calculateClockOrientation(data.trueHeading);
+          setHeading(data.trueHeading);
+          if (newOrientation !== lastOrientation) {
+            audioManager.playSound(`hour_${newOrientation}`, { volume: 0.6, delay: 0 });
+          }
+          lastOrientation = newOrientation;
+        }
+      });
+
+      return () => headingSubscription.remove(); // Limpiar suscripción
     })();
   }, []);
 
+  //Intreactuar con los marcadores
   const openDialog = (coordinate: { latitude: number; longitude: number }) => {
     setNewMarker(coordinate);
     setDialogVisible(true);
@@ -122,6 +161,9 @@ export default function MapScreen() {
     }
 
   };
+ 
+  
+  // Reproducir sonido de alerta
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3; // Radio de la Tierra en metros
@@ -137,11 +179,14 @@ export default function MapScreen() {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c; // Distancia en metros
   };
+
   const checkProximity = (
     userLocation: { latitude: number; longitude: number; }, 
-    markers: { latitude: number; longitude: number; id: number; }[]
+    markers: { latitude: number; longitude: number; id: number; type: keyof typeof OBSTACLE_TYPES }[]
 ) => {
-    markers.forEach(marker => {
+    markers.forEach(async marker => {
+      if (marker.type === 'beach') return;
+
       const distance = getDistance(
         userLocation.latitude,
         userLocation.longitude,
@@ -149,14 +194,88 @@ export default function MapScreen() {
         marker.longitude
       );
       
-      if (distance < 10) {
+      const maxDistance = 100;
+      const soundType = marker.type === 'buoy' ? 'buoy' : 'boat';
+      if (distance < maxDistance) {
         console.log(`Distancia al marcador ${marker.id}: ${distance} metros. Reproduciendo sonido.`);
-        // Si ya hay un intervalo activo para este marcador, ajustarlo
-        playSound();
-     }
+        const volume = 1 - (distance / maxDistance);
+        const delay = Math.max(300, 2500 * (distance / maxDistance));
+
+        // Calcular dirección relativa
+        const bearing = calculateBearing(
+          userLocation.latitude,
+          userLocation.longitude,
+          marker.latitude,
+          marker.longitude
+        );
+
+        await audioManager.playDirectionalSound(soundType, {
+          volume,
+          delay,
+          isLooping: true,
+          bearing, // Dirección del sonido
+          userHeading: heading || 0, // Dirección del usuario
+        });
+      } else {
+        await audioManager.stopSound(soundType);
+      }
     });
   };
   
+  // Vuelta a la playa
+  useEffect(() => {
+    const playBeachFeedback = async (clock: number, distance: number) => {
+      // Reproducir número de hora
+      await audioManager.playSound(`hour_${clock}`, { volume: 0.8, delay: 0 });
+      
+      // Reproducir distancia en intervalos de 50m
+      if (distance < 35) {
+        if (distance > 15){
+          await audioManager.playSound('distance_25', { volume: 0.7, delay: 1000 });
+        }else if (distance < 15 && distance > 7){
+          await audioManager.playSound('distance_10', { volume: 0.7, delay: 1000 });
+        }else if (distance < 7 && distance > 0){
+          await audioManager.playSound('distance_5', { volume: 0.7, delay: 1000 });
+        }
+      }
+      else if(distance>= 35){
+        const distanceRounded = Math.round(distance / 50) * 50;
+        if (distanceRounded > 0) {
+          await audioManager.playSound(`distance_${distanceRounded}`, {
+            volume: 0.7,
+            delay: 1000
+          });
+        }
+      }
+    };
+  
+    const updateBeachFeedback = async () => {
+      const beach = markers.find(m => m.type === 'beach');
+      if (beach && location && heading !== null) {
+        const distance = getDistance(
+          location.coords.latitude,
+          location.coords.longitude,
+          beach.latitude,
+          beach.longitude
+        );
+        
+        const bearing = calculateBearing(
+          location.coords.latitude,
+          location.coords.longitude,
+          beach.latitude,
+          beach.longitude
+        );
+        
+        const clock = calculateClockOrientation(bearing);
+        await playBeachFeedback(clock, distance);
+      }
+    };
+  
+    const interval = setInterval(updateBeachFeedback, 6000);
+    return () => clearInterval(interval);
+  }, [markers, location, heading]);
+
+
   useEffect(() => {
     let locationSubscription: { remove: any; };
     (async () => {
@@ -174,6 +293,13 @@ export default function MapScreen() {
     return () => locationSubscription && locationSubscription.remove();
   }, [markers]);
 
+  
+  useEffect(() => {
+    return () => {
+      audioManager.stopAll();
+    };
+  }, []);
+
   return (
     <View style={styles.container}>
       {region && (
@@ -182,16 +308,15 @@ export default function MapScreen() {
             <Marker
               coordinate={{ latitude: location.coords.latitude, longitude: location.coords.longitude }}
               title="Tu ubicación"
-              //description={`Dirección: ${heading ? heading.toFixed(1) + '°' : 'N/A'}`}
-              description={`Dirección: ${orientation.alpha.toFixed(1)}°`}
+              description={`Dirección: ${heading ? heading.toFixed(1) + '°' : 'N/A'}`}
+              //description={`Dirección: ${sensors.orientation.yaw.toFixed(1)}°`}
               anchor={{ x: 0.5, y: 0.5 }}
-              //rotation={heading || 0}
-              rotation={orientation.alpha || 0}
+              rotation={heading || 0}
+              //rotation={sensors.orientation.yaw || 0}
               icon={require('../assets/images/directionIcon.png')}
             />
 
           )}
-
           {markers.map((marker) => (
             <Marker
               key={marker.id}
@@ -225,6 +350,9 @@ export default function MapScreen() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+      <View style={styles.infoContainer}>
+        <Text style={styles.infoText}>Inclinación actual: {roll.toFixed(1)}°</Text>
+      </View>
     </View>
   );
 }
@@ -232,4 +360,13 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { width: '100%', height: '100%' },
+  infoContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    padding: 10,
+    borderRadius: 8,
+  },
+  infoText: { fontSize: 16, color: '#000' },
 });
