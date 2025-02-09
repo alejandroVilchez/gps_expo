@@ -1,44 +1,64 @@
-import { Accelerometer, Gyroscope, Magnetometer } from "expo-sensors";
-import { useState, useEffect, useRef } from "react";
-import { View, Text } from "react-native";
-import { playSound } from "./sound";
+import { useState, useEffect } from 'react';
+import { DeviceMotion } from 'expo-sensors';
+import { Audio } from 'expo-av';
 
-export default function Sensors() {
-    const [accelData, setAccelData] = useState({ x: 0, y: 0, z: 0 });
-    const [gyroData, setGyroData] = useState({ x: 0, y: 0, z: 0 });
-    const [magData, setMagData] = useState({ x: 0, y: 0, z: 0 });
-    const [roll, setRoll] = useState(0);
-    const lastRoll = useRef(0); // Almacena el último roll registrado
-    const THRESHOLD = 10; // Umbral en grados para activar sonido
-    const activationDelay = 5; // retardo de activación
+const useSensors = () => {
+  const [orientation, setOrientation] = useState({ roll: 0, pitch: 0, yaw: 0 });
+  const [tiltAngle, setTiltAngle] = useState(0);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
-    useEffect(() => {
-      Accelerometer.setUpdateInterval(200); // Reducimos frecuencia de actualización
-  
-      const accelSub = Accelerometer.addListener((data) => {
-        setAccelData(data);
-        const newRoll = Math.atan2(data.y, Math.sqrt(data.x * data.x + data.z * data.z)) * (180 / Math.PI);
-  
-        setRoll(newRoll);
-  
-        // Filtro de histéresis: evita activar sonido en cada fluctuación mínima
-        if (Math.abs(newRoll) > THRESHOLD && Math.abs(newRoll - lastRoll.current) > activationDelay ) {
-          playSound();
-          lastRoll.current = newRoll; // Actualizar último roll registrado
+  useEffect(() => {
+    let subscription: { remove: any; };
+
+    const subscribe = async () => {
+      subscription = DeviceMotion.addListener(({ rotation, acceleration }) => {
+        if (rotation) {
+          setOrientation({
+            roll: (rotation.beta * 180) / Math.PI, // Inclinación lateral
+            pitch: (rotation.alpha * 180) / Math.PI, // Inclinación adelante/atrás
+            yaw: (rotation.gamma * 180) / Math.PI, // Rotación en su propio eje
+          });
+        }
+
+        if (acceleration) {
+          const rollAngle = Math.atan2(acceleration.y, acceleration.z) * (180 / Math.PI);
+          setTiltAngle(Math.abs(rollAngle));
         }
       });
-  
-      return () => {
-        accelSub.remove();
-      };
-    }, []);
+    };
 
-    return (
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <Text>Acelerómetro: X {accelData.x.toFixed(2)}, Y {accelData.y.toFixed(2)}, Z {accelData.z.toFixed(2)}</Text>
-        <Text>Giroscopio: X {gyroData.x.toFixed(2)}, Y {gyroData.y.toFixed(2)}, Z {gyroData.z.toFixed(2)}</Text>
-        <Text>Magnetómetro: X {magData.x.toFixed(2)}, Y {magData.y.toFixed(2)}, Z {magData.z.toFixed(2)}</Text>
-        <Text>Roll (Acelerómetro): {roll.toFixed(2)}°</Text>
-        </View>
-    );
-}
+    subscribe();
+    return () => subscription && subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | undefined;
+
+    const playWarningSound = async () => {
+      if (!sound) {
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          require('../assets/snap.mp3')
+        );
+        setSound(newSound);
+      }
+      if (sound) {
+        await sound.replayAsync();
+      }
+    };
+
+    if (tiltAngle > 10) {
+      const frequency = Math.max(200, 2000 - tiltAngle * 100); // Más inclinado -> menor intervalo
+      interval = setInterval(playWarningSound, frequency);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [tiltAngle]);
+
+  return { orientation, tiltAngle };
+};
+
+export default useSensors;

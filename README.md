@@ -14,7 +14,11 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo install react-native-maps
    npx expo install @react-native-async-storage/async-storage
    npx expo install @react-navigation/stack
-
+   npx expo install expo-auth-session
+   npx expo install expo-web-browser
+   npx expo install expo-random
+   npx expo install react-native-paper
+   npm i @mui/material @emotion/react @emotion/styled @mui/icons-material
    ```
 
 2. Start the app

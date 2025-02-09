@@ -3,12 +3,32 @@ import { View, StyleSheet, Alert } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { playSound } from './sound';
+import { Button, Dialog, Portal, RadioButton } from "react-native-paper";
+import { playSound } from '../components/sound';
+import { useOrientation } from './sensors'; // Importa el hook de orientación
+
+
+const OBSTACLE_TYPES = {
+  boat: { label: "Otra embarcación", color: "blue" },
+  buoy: { label: "Boya", color: "purple" },
+  beach: { label: "Playa (punto de partida)", color: "green" },
+};
 
 export default function MapScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [region, setRegion] = useState<Region | null>(null);
-  const [markers, setMarkers] = useState<{ latitude: number; longitude: number; id: number }[]>([]);
+
+  //const [heading, setHeading] = useState<number | null>(null);
+  const orientation = useOrientation(); 
+
+
+  const [markers, setMarkers] = useState<{ latitude: number; longitude: number; id: number, type: keyof typeof OBSTACLE_TYPES }[]>([]);
+  const [selectedMarker, setSelectedMarker] = useState<number | null>(null);
+
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [selectedType, setSelectedType] = useState<keyof typeof OBSTACLE_TYPES>("boat");
+  const [newMarker, setNewMarker] = useState<{ latitude: number; longitude: number } | null>(null);
+  
 
   // Cargar marcadores guardados al iniciar
   useEffect(() => {
@@ -27,7 +47,8 @@ export default function MapScreen() {
   }, []);
 
   // Guardar marcadores en AsyncStorage
-  const saveMarkers = async (newMarkers: { latitude: number; longitude: number; id: number }[]) => {
+  //const saveMarkers = async (newMarkers: { latitude: number; longitude: number; id: number }[]) => {
+  const saveMarkers = async (newMarkers: typeof markers) => {
     try {
       await AsyncStorage.setItem('markers', JSON.stringify(newMarkers));
     } catch (error) {
@@ -53,35 +74,53 @@ export default function MapScreen() {
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       });
+
+      // let headingSubscription = await Location.watchHeadingAsync((data) => {
+      // setHeading(data.trueHeading);
+      // });
+
+      // return () => headingSubscription.remove(); // Limpiar suscripción
     })();
   }, []);
 
-
-  // Agregar un marcador al tocar el mapa
-  const handleMapPress = (event: any) => {
-    const { latitude, longitude } = event.nativeEvent.coordinate;
-    const newMarkers = [...markers, { latitude, longitude, id: Date.now() }];
-    setMarkers(newMarkers);
-    saveMarkers(newMarkers);
+  const openDialog = (coordinate: { latitude: number; longitude: number }) => {
+    setNewMarker(coordinate);
+    setDialogVisible(true);
   };
 
-  // Eliminar marcador al presionar
+  const saveMarker = () => {
+    if (newMarker) {
+      const newMarkers = [
+        ...markers,
+        { latitude: newMarker.latitude, longitude: newMarker.longitude, id: Date.now(), type: selectedType },
+      ];
+      setMarkers(newMarkers);
+      saveMarkers(newMarkers);
+      setNewMarker(null);
+      setDialogVisible(false);
+    }
+  };
   const handleMarkerPress = (id: number) => {
-    Alert.alert(
-      'Obstáculo',
-      '¿Quieres eliminar este marcador?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          onPress: () => {
-            const updatedMarkers = markers.filter((marker) => marker.id !== id);
-            setMarkers(updatedMarkers);
-            saveMarkers(updatedMarkers);
+    if (selectedMarker === id) {
+      Alert.alert(
+        'Obstáculo',
+        '¿Quieres eliminar este marcador?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Eliminar',
+            onPress: () => {
+              const updatedMarkers = markers.filter((marker) => marker.id !== id);
+              setMarkers(updatedMarkers);
+              saveMarkers(updatedMarkers);
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    } else {
+      setSelectedMarker(id);
+    }
+
   };
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -126,7 +165,6 @@ export default function MapScreen() {
         console.error("Permiso de ubicación denegado");
         return;
       }
-  
       locationSubscription = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
         (location) => checkProximity(location.coords, markers)
@@ -139,32 +177,54 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       {region && (
-        <MapView style={styles.map} initialRegion={region} onPress={handleMapPress}>
+        <MapView style={styles.map} initialRegion={region} onPress={(e) => openDialog(e.nativeEvent.coordinate)}>
           {location && (
             <Marker
-              coordinate={{
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-              }}
+              coordinate={{ latitude: location.coords.latitude, longitude: location.coords.longitude }}
               title="Tu ubicación"
-              description="Estás aquí"
+              //description={`Dirección: ${heading ? heading.toFixed(1) + '°' : 'N/A'}`}
+              description={`Dirección: ${orientation.alpha.toFixed(1)}°`}
+              anchor={{ x: 0.5, y: 0.5 }}
+              //rotation={heading || 0}
+              rotation={orientation.alpha || 0}
+              icon={require('../assets/images/directionIcon.png')}
             />
+
           )}
 
-          {/* Renderizar los marcadores añadidos */}
           {markers.map((marker) => (
             <Marker
               key={marker.id}
               coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
-              title="Obstáculo"
+              title={OBSTACLE_TYPES[marker.type].label}
               description={`Lat: ${marker.latitude.toFixed(5)}, Lon: ${marker.longitude.toFixed(5)}`}
-              pinColor="purple"
-              onPress={() => handleMarkerPress(marker.id)} // Al presionar, eliminar marcador
-              
+              pinColor={OBSTACLE_TYPES[marker.type].color}
+              onPress={() => handleMarkerPress(marker.id)}
             />
           ))}
         </MapView>
       )}
+
+      {/* Diálogo para seleccionar el tipo de obstáculo */}
+      <Portal>
+        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)}>
+          <Dialog.Title>Seleccionar tipo de obstáculo</Dialog.Title>
+          <Dialog.Content>
+            <RadioButton.Group
+              onValueChange={(value) => setSelectedType(value as keyof typeof OBSTACLE_TYPES)}
+              value={selectedType}
+            >
+              {Object.entries(OBSTACLE_TYPES).map(([key, { label }]) => (
+                <RadioButton.Item key={key} label={label} value={key} />
+              ))}
+            </RadioButton.Group>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setDialogVisible(false)}>Cancelar</Button>
+            <Button onPress={saveMarker}>Guardar</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }
