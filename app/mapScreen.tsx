@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button, Dialog, Portal, RadioButton } from "react-native-paper";
 import useSensors from './sensors'; 
 import { audioManager } from '../components/audioManager';
-import { calculateClockOrientation, calculateBearing } from '../utils/orientationUtils';
+import { calculateClockOrientation, calculateBearing, mapClockOrientation } from '../utils/orientationUtils';
 
 
 
@@ -45,9 +45,6 @@ export default function MapScreen() {
   const [selectedType, setSelectedType] = useState<keyof typeof OBSTACLE_TYPES>("boat");
   const [newMarker, setNewMarker] = useState<{ latitude: number; longitude: number } | null>(null);
   
-
-  const beachFeedbackInterval = useRef<NodeJS.Timeout | null>(null);
-  const proximityCheckTimeout = useRef<NodeJS.Timeout | null>(null);
 
 
   // cargar sonidos
@@ -109,11 +106,12 @@ export default function MapScreen() {
       let headingSubscription = await Location.watchHeadingAsync((data) => {
         if(data.trueHeading){
           const newOrientation = calculateClockOrientation(data.trueHeading);
+          const mappedOrientation = mapClockOrientation(newOrientation);
           setHeading(data.trueHeading);
-          if (newOrientation !== lastOrientation) {
-            audioManager.playSound(`hour_${newOrientation}`, { volume: 0.6, delay: 0 });
+          if (mappedOrientation !== lastOrientation) {
+            audioManager.playSound(`hour_${mappedOrientation}`, { volume: 0.6, delay: 0 });
           }
-          lastOrientation = newOrientation;
+          lastOrientation = mappedOrientation;
         }
       });
 
@@ -266,7 +264,8 @@ export default function MapScreen() {
           beach.longitude
         );
         
-        const clock = calculateClockOrientation(bearing);
+        const relativeBearing = (bearing - heading + 360) % 360;
+        const clock = calculateClockOrientation(relativeBearing);
         await playBeachFeedback(clock, distance);
       }
     };
@@ -352,6 +351,8 @@ export default function MapScreen() {
       </Portal>
       <View style={styles.infoContainer}>
         <Text style={styles.infoText}>Inclinación actual: {roll.toFixed(1)}°</Text>
+        <Text style={styles.infoText}>Orientación actual: {heading?.toFixed(1)}º</Text>
+        <Text style={styles.infoText}>Dirección playa en horas: {} </Text>
       </View>
     </View>
   );
