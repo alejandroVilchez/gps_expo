@@ -4,11 +4,17 @@ import { Audio } from 'expo-av';
 
 const useSensors = () => {
   const [roll, setRoll] = useState(0);
+  const [pitch, setPitch] = useState(0);
+  const [yaw, setYaw] = useState(0);
+  
   const soundRef = useRef<Audio.Sound | null>(null);
   const isPlaying = useRef(false);
   const lastAngle = useRef(0);
   const lastPlayTime = useRef<number>(Date.now());
 
+  const lastUpdateRef = useRef<number>(0);
+  const yawAccumulated = useRef(0);
+  const smoothedYaw = useRef(0);
   // Configuración
   const MIN_ANGLE = 10;
   const MAX_ANGLE = 40;
@@ -32,26 +38,45 @@ const useSensors = () => {
   // Detección de inclinación CORREGIDA (usando eje X para roll)
   useEffect(() => {
     let smoothedRoll = 0;
+    let smoothedPitch = 0;
+    //let smoothedYaw = 0;
     
-    const sub = DeviceMotion.addListener(({ accelerationIncludingGravity }) => {
-      if (!accelerationIncludingGravity) return;
+    const sub = DeviceMotion.addListener(({ accelerationIncludingGravity, rotationRate }) => {
+      if (!accelerationIncludingGravity || !rotationRate) return;
       
       const { x, y, z } = accelerationIncludingGravity;
+
       // Cálculo de roll usando eje X
       const rawRoll = Math.atan2(x, Math.sqrt(y*y + z*z)) * (180/Math.PI);
       smoothedRoll = smoothedRoll * (1 - SMOOTHING) + rawRoll * SMOOTHING;
       // Calculo de pitch usando eje Y
-      // const rawPitch = Math.atan2(y, Math.sqrt(x*x + z*z)) * (180/Math.PI);
-      // const smoothedPitch = smoothedPitch * (1 - SMOOTHING) + rawPitch * SMOOTHING;
-      const absRoll = Math.abs(smoothedRoll);
-      setRoll(absRoll);
-      lastAngle.current = absRoll;
+      const rawPitch = Math.atan2(y, Math.sqrt(x*x + z*z)) * (180/Math.PI);
+      smoothedPitch = smoothedPitch * (1 - SMOOTHING) + rawPitch * SMOOTHING;
+      
+     
+      setPitch(smoothedPitch);
+      setRoll(Math.abs(smoothedRoll));
+      lastAngle.current = Math.abs(smoothedRoll);
+
+
+      if(rotationRate && typeof rotationRate.gamma === 'number'){
+        const currentTime = Date.now();
+        if(lastUpdateRef.current !== null){
+          const dt = (currentTime - lastUpdateRef.current) /1000;
+          yawAccumulated.current += -rotationRate.gamma * dt;
+          yawAccumulated.current = ((yawAccumulated.current % 360) +360 ) % 360;
+          smoothedYaw.current = smoothedYaw.current * (1-SMOOTHING) + yawAccumulated.current * SMOOTHING;
+          setYaw(smoothedYaw.current );
+        }
+        lastUpdateRef.current = currentTime;
+
+      }
     });
 
     return () => sub.remove();
   }, []);
 
-  // Control de sonido mejorado con setInterval
+  // Control de sonido
   useEffect(() => {
     const interval = setInterval(() => {
       const currentAngle = lastAngle.current;
@@ -82,7 +107,7 @@ const useSensors = () => {
     return () => clearInterval(interval);
   }, []);
 
-  return { roll };
+  return { roll, pitch, yaw };
 };
 
 export default useSensors;

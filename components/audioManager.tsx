@@ -1,103 +1,101 @@
+// audioManager.ts
 import { Audio } from 'expo-av';
-import { SOUNDS } from './soundConfig';
-
 
 type SoundConfig = {
   volume: number;
-  delay: number;
-  isLooping?: boolean;
+  minDelay: number;
+  maxDelay: number;
+};
+
+const SOUND_CONFIG: { [key: string]: { source: any; config: SoundConfig } } = {
+  boat: {
+    source: { uri: 'https://software-mansion-labs.github.io/react-native-audio-api/audio/sounds/C4.mp3' },
+    config: { volume: 1.0, minDelay: 500, maxDelay: 2000 },
+  },
+  buoy: {
+    source: { uri: 'https://software-mansion-labs.github.io/react-native-audio-api/audio/sounds/Ds4.mp3' },
+    config: { volume: 1.0, minDelay: 500, maxDelay: 2000 },
+  },
 };
 
 class AudioManager {
   private sounds: Map<string, Audio.Sound> = new Map();
-  private timeouts: Map<string, NodeJS.Timeout> = new Map();
+  private loopTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
-  async loadAllSounds() {
+  // Convertimos a arrow function para mantener el contexto de 'this'
+  loadAllSounds = async () => {
     try {
-      //  obstáculos
-      for (const [key, sound] of Object.entries(SOUNDS.obstacles)) {
-        await this.loadSound(key, sound);
-      }
-      // horas
-      for (const [key, sound] of Object.entries(SOUNDS.beachHours)) {
-        await this.loadSound(key, sound);
-      }
-      // distancias
-      for (const [key, sound] of Object.entries(SOUNDS.distances)) {
-        await this.loadSound(key, sound);
+      for (const [key, { source, config }] of Object.entries(SOUND_CONFIG)) {
+        await this.loadSound(key, source, config.volume);
       }
     } catch (error) {
       console.error('Error loading sounds:', error);
     }
-  }
+  };
 
-  async loadSound(key: string, source: any) {
-    const { sound } = await Audio.Sound.createAsync(source);
-    this.sounds.set(key, sound);
-  }
+  loadSound = async (key: string, source: any, volume: number) => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(source, {
+        shouldPlay: false,
+        volume,
+      });
+      this.sounds.set(key, sound);
+    } catch (error) {
+      console.error(`Error loading sound ${key}:`, error);
+    }
+  };
 
-  async playSound(key: string, config: SoundConfig) {
-    const sound = this.sounds.get(key);
+  scheduleObstacleAlert = async (type: 'boat' | 'buoy', distance: number) => {
+    const sound = this.sounds.get(type);
+    if (!sound) {
+      console.warn(`Sound for ${type} not loaded`);
+      return;
+    }
+    // Calculamos el delay en función de la distancia
+    const maxDistance = 100;
+    const { minDelay, maxDelay } = SOUND_CONFIG[type].config;
+    const clampedDistance = Math.min(distance, maxDistance);
+    const delay = minDelay + (maxDelay - minDelay) * (clampedDistance / maxDistance);
+
+    try {
+      await sound.replayAsync();
+    } catch (error) {
+      console.error(`Error playing sound ${type}:`, error);
+    }
+    const existingTimeout = this.loopTimeouts.get(type);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+    const timeoutId = setTimeout(() => {
+      this.scheduleObstacleAlert(type, distance);
+    }, delay);
+    this.loopTimeouts.set(type, timeoutId);
+  };
+
+  stopObstacleAlert = async (type: string) => {
+    const sound = this.sounds.get(type);
     if (sound) {
-      await sound.setVolumeAsync(config.volume);
-      await sound.setRateAsync(1.0, true);
-      await sound.playAsync();
-      
-      if (config.isLooping && config.delay > 0) {
-        this.setupLoop(key, config.delay);
+      try {
+        await sound.stopAsync();
+      } catch (error) {
+        console.error(`Error stopping sound ${type}:`, error);
       }
     }
-  }
-
-  async playDirectionalSound(key: string, config: SoundConfig & { bearing: number, userHeading: number }) {
-    const { bearing, userHeading, ...soundConfig } = config;
-    const pan = this.calculatePan(bearing, userHeading);
-    const sound = this.sounds.get(key);
-    
-    if (sound) {
-      await sound.setPositionAsync(pan);
-      await this.playSound(key, soundConfig);
+    const timeout = this.loopTimeouts.get(type);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.loopTimeouts.delete(type);
     }
-  }
+  };
 
-  private calculatePan(bearing: number, userHeading: number): number {
-    const relativeAngle = (bearing - userHeading + 360) % 360;
-    // Mapear ángulo de 0-360 a pan de -1 a 1
-    return Math.sin(relativeAngle * Math.PI / 180);
-  }
-
-  private setupLoop(key: string, delay: number) {
-    const loop = () => {
-      const sound = this.sounds.get(key);
-      sound?.replayAsync();
-      this.timeouts.set(key, setTimeout(loop, delay));
-    };
-    this.timeouts.set(key, setTimeout(loop, delay));
-  }
-
-  async stopSound(key: string) {
-    const sound = this.sounds.get(key);
-    if (sound) {
-      await sound.stopAsync();
-      const timeout = this.timeouts.get(key);
-      if (timeout) clearTimeout(timeout);
+  unloadAll = async () => {
+    for (const sound of this.sounds.values()) {
+      await sound.unloadAsync();
     }
-  }
-
-  async unloadAll() {
-    await Promise.all(Array.from(this.sounds.values()).map(sound => sound.unloadAsync()));
     this.sounds.clear();
-    this.timeouts.forEach(timeout => clearTimeout(timeout));
-    this.timeouts.clear();
-  }
-
-  async stopAll() {
-    await Promise.all(
-      Array.from(this.sounds.values()).map(sound => sound.stopAsync())
-    );
-    this.timeouts.forEach(timeout => clearTimeout(timeout));
-    this.timeouts.clear();
-  }
+    this.loopTimeouts.forEach((timeout) => clearTimeout(timeout));
+    this.loopTimeouts.clear();
+  };
 }
 
 export const audioManager = new AudioManager();

@@ -14,6 +14,8 @@ export default function RootLayout() {
           <Stack.Screen name="aboutUs" options={{ title: 'About Us'}}/>
           <Stack.Screen name="user/logIn" options={{ title: 'Log In'}}/>
           <Stack.Screen name="user/register" options={{ title: 'Sign Up'}}/>
+          <Stack.Screen name="regattaSimulation" options={{ title: 'Simulación'}}/>
+
         </Stack>
     </PaperProvider>  
     </AuthProvider>
