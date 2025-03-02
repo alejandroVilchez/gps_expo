@@ -25,9 +25,7 @@ export default function MapScreen() {
 
   const [heading, setHeading] = useState<number | null>(null);
   
-  const { roll } = useSensors();
-  const { pitch } = useSensors();
-  const { yaw } = useSensors();
+  const { roll, pitch, yaw, calibrateNorth  } = useSensors();
   
   const [markers, setMarkers] = useState<{ latitude: number; longitude: number; id: number, type: keyof typeof OBSTACLE_TYPES }[]>([]);
   const [selectedMarker, setSelectedMarker] = useState<number | null>(null);
@@ -37,11 +35,21 @@ export default function MapScreen() {
   const [newMarker, setNewMarker] = useState<{ latitude: number; longitude: number } | null>(null);
   
 
-  const { scheduleObstacleAlert, stopObstacleAlert, loadAllSounds } = audioManager;
+  const { scheduleObstacleAlert, stopObstacleAlert, loadAllSounds, loadBeachSounds, scheduleBeachSignal } = audioManager;
+  const [beachSignalActive, setBeachSignalActive] = useState(false);
+
+  const toggleBeachSignal = () => {
+    setBeachSignalActive(!beachSignalActive);
+  }
 
   useEffect(() => {
     loadAllSounds();
   }, []);
+
+  useEffect(() => {
+    loadBeachSounds();
+  }, []);
+  
 
   // Cargar marcadores guardados al iniciar
   useEffect(() => {
@@ -155,7 +163,7 @@ export default function MapScreen() {
     const obstacles: { [key: string]: number[] } = {};
     markers.forEach(async marker => {
       if (marker.type === 'beach') return;
-
+           
       const distance = getDistance(
         userLocation.latitude,
         userLocation.longitude,
@@ -163,22 +171,15 @@ export default function MapScreen() {
         marker.longitude
       );
       
-      // const maxDistance = 100;
-
-      // if (distance < maxDistance) {
-      //   console.log(`Distancia al marcador ${marker.id}: ${distance} metros. Reproduciendo sonido.`);
-
-      //   //scheduleObstacleAlert(marker.type === 'buoy' ? 'buoy' : 'boat', distance);
-      // }
-      // //stopObstacleAlert(marker.type === 'buoy' ? 'buoy' : 'boat');
       if (distance < 100) { // Umbral de 100 m
         if (!obstacles[marker.type]) obstacles[marker.type] = [];
         obstacles[marker.type].push(distance);
       }
     });
-    
+
     Object.keys(OBSTACLE_TYPES).forEach(type => {
       if (type === 'beach') return;
+      
       if (obstacles[type] && obstacles[type].length > 0) {
         const minDistance = Math.min(...obstacles[type]);
         // Llama a scheduleObstacleAlert pasándole el tipo y la distancia mínima
@@ -189,8 +190,6 @@ export default function MapScreen() {
       }
     });
   };
-  
-  
 
 
   useEffect(() => {
@@ -221,6 +220,28 @@ export default function MapScreen() {
     }
   }, [markers]);
 
+  useEffect(() => {
+    if (beachSignalActive) {
+      const beachMarker = markers.find(marker => marker.type === 'beach');
+      if (beachMarker) {
+        const distanceToBeach = getDistance(
+          location?.coords.latitude || 0,
+          location?.coords.longitude || 0,  
+          beachMarker.latitude,
+          beachMarker.longitude
+        );
+        const BEACH_SIGNAL_THRESHOLD = 300; // Umbral de 1000 m  
+        if (distanceToBeach < BEACH_SIGNAL_THRESHOLD) {
+          scheduleBeachSignal(
+            { latitude: beachMarker.latitude, longitude: beachMarker.longitude },
+            { latitude: location?.coords.latitude || 0, longitude: location?.coords.longitude || 0 },
+            yaw || 0
+          );
+        }
+      } 
+    }
+  }, [beachSignalActive, location, markers, yaw]);
+ 
 
   return (
     <View style={styles.container}>
@@ -271,9 +292,13 @@ export default function MapScreen() {
         </Dialog>
       </Portal>
       <View style={styles.infoContainer}>
+        <Button mode="contained" onPress={calibrateNorth} style={{backgroundColor: "#007AFF"}}>Calibrar Norte</Button>
         <Text style={styles.infoText}>Inclinación actual: {roll.toFixed(1)}°</Text>
         <Text style={styles.infoText}>Orientación actual: {yaw?.toFixed(1)}º</Text>
 
+      </View>
+      <View style={styles.switchContainer}>
+        <Button mode="contained" onPress={toggleBeachSignal} style={{backgroundColor: "#007AFF"}}>Señal Playa</Button>
       </View>
     </View>
   );
@@ -291,4 +316,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   infoText: { fontSize: 16, color: '#000' },
+  switchContainer:{
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    padding: 10,
+    borderRadius: 8,
+  },
 });

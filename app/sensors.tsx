@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { DeviceMotion } from 'expo-sensors';
+import { DeviceMotion, Magnetometer } from 'expo-sensors';
 import { Audio } from 'expo-av';
 
 const useSensors = () => {
   const [roll, setRoll] = useState(0);
   const [pitch, setPitch] = useState(0);
   const [yaw, setYaw] = useState(0);
+
+  const [calibrationOffset, setCalibrationOffset] = useState<number | null>(null);
+
   
   const soundRef = useRef<Audio.Sound | null>(null);
   const isPlaying = useRef(false);
@@ -66,15 +69,23 @@ const useSensors = () => {
           yawAccumulated.current += -rotationRate.gamma * dt;
           yawAccumulated.current = ((yawAccumulated.current % 360) +360 ) % 360;
           smoothedYaw.current = smoothedYaw.current * (1-SMOOTHING) + yawAccumulated.current * SMOOTHING;
-          setYaw(smoothedYaw.current );
+          let adjustedYaw = smoothedYaw.current;
+          if(calibrationOffset !== null){
+            adjustedYaw = ((smoothedYaw.current - calibrationOffset)%360 + 360) % 360;
+          }
+          setYaw(adjustedYaw);
         }
         lastUpdateRef.current = currentTime;
 
       }
-    });
+    }, );
 
     return () => sub.remove();
-  }, []);
+  }, [calibrationOffset]);
+
+  const calibrateNorth = () => {
+    setCalibrationOffset(smoothedYaw.current);
+  };  
 
   // Control de sonido
   useEffect(() => {
@@ -107,7 +118,7 @@ const useSensors = () => {
     return () => clearInterval(interval);
   }, []);
 
-  return { roll, pitch, yaw };
+  return { roll, pitch, yaw, calibrateNorth };
 };
 
 export default useSensors;

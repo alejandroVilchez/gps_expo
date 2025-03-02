@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { PaperProvider, Button, Card, Title  } from 'react-native-paper';
 import {AuthContext} from '../contexts/AuthContext';
 import React, {useContext, useState} from 'react';
-
+import useSensors from './sensors';
 
 export default function App() {
 
@@ -12,6 +12,10 @@ export default function App() {
   // Estado para determinar si el tracking está activo
   const [trackingActive, setTrackingActive] = useState(false);
   const [switchUserMode, setSwitchUserMode] = useState(false);
+
+  const { roll, pitch, yaw, calibrateNorth  } = useSensors();
+
+
   const toggleSwitchUserMode = () => setSwitchUserMode(!switchUserMode);
   const toggleTracking = () => {
     if (!trackingActive) {
@@ -54,15 +58,9 @@ export default function App() {
     return (
       <View style={styles.container}>
           <Text style={styles.title}>Bienvenido a la App</Text>
-          <Button 
-            mode="contained"
-            icon="account-plus"
-            onPress = {toggleSwitchUserMode}
-            style={[styles.button, { backgroundColor: 'grey' }]}
-            contentStyle={styles.buttonContent}
-            labelStyle={styles.buttonLabel}>
-            Switch User Mode
-          </Button>
+          <View style={styles.switchContainer}>
+              <Button mode="contained" onPress={toggleSwitchUserMode} style={{backgroundColor: "#007AFF"}}>Cambiar menú ( ͡° ͜ʖ ͡°)</Button>
+          </View>
           <Button
             mode="contained"
             icon="login"
@@ -114,15 +112,10 @@ export default function App() {
         
         <View style={styles.container}>
             <Text style={styles.title}>Inicio</Text>
-            <Button 
-              mode="contained"
-              icon="account-plus"
-              onPress = {toggleSwitchUserMode}
-              style={[styles.button, { backgroundColor: 'grey'}]}
-              contentStyle={styles.buttonContent}
-              labelStyle={styles.buttonLabel}>
-              Switch User Mode
-            </Button>
+            <View style={styles.switchContainer}>
+              <Button mode="contained" onPress={toggleSwitchUserMode} style={{backgroundColor: "#007AFF"}}>Cambiar menú ( ͡° ͜ʖ ͡°)</Button>
+            </View>
+            
             <Button
                 mode="contained"
                 onPress={toggleTracking}
@@ -165,7 +158,14 @@ export default function App() {
                 >
                 Configuración de navegación
             </Button>
+            <View style={styles.infoContainer}>
+              <Button mode="contained" onPress={calibrateNorth} style={{backgroundColor: "#007AFF"}}>Calibrar Norte</Button>
+              <Text style={styles.infoText}>Inclinación actual: {roll.toFixed(1)}°</Text>
+              <Text style={styles.infoText}>Orientación actual: {yaw?.toFixed(1)}º</Text>
+
+            </View>
         </View>
+        
     );
    }
   
@@ -206,4 +206,21 @@ const styles = StyleSheet.create({
       fontWeight: 'bold',
       marginTop: 10,
     },
+    switchContainer:{
+      position: 'absolute',
+      top: 20,
+      right: 20,
+      backgroundColor: 'rgba(255, 255, 255, 0.8)',
+      padding: 10,
+      borderRadius: 8,
+    },
+    infoContainer: {
+      position: 'absolute',
+      bottom: 20,
+      left: 20,
+      backgroundColor: 'rgba(255, 255, 255, 0.8)',
+      padding: 10,
+      borderRadius: 8,
+    },
+    infoText: { fontSize: 16, color: '#000' },
   });

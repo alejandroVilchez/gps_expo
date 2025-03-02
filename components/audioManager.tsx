@@ -1,5 +1,6 @@
 // audioManager.ts
 import { Audio } from 'expo-av';
+import { SOUNDS } from './soundConfig'
 
 type SoundConfig = {
   volume: number;
@@ -21,6 +22,11 @@ const SOUND_CONFIG: { [key: string]: { source: any; config: SoundConfig } } = {
 class AudioManager {
   private sounds: Map<string, Audio.Sound> = new Map();
   private loopTimeouts: Map<string, NodeJS.Timeout> = new Map();
+
+  private beachHourSounds: Map<number, Audio.Sound> = new Map();
+  private distanceSounds: Map<number, Audio.Sound> = new Map();
+
+  private isBeachSignalPlaying: boolean = false;
 
   // Convertimos a arrow function para mantener el contexto de 'this'
   loadAllSounds = async () => {
@@ -56,6 +62,17 @@ class AudioManager {
     const { minDelay, maxDelay } = SOUND_CONFIG[type].config;
     const clampedDistance = Math.min(distance, maxDistance);
     const delay = minDelay + (maxDelay - minDelay) * (clampedDistance / maxDistance);
+
+    const minVolume = 0.2;
+    const volume = minVolume + (1 - clampedDistance / maxDistance) * (1 - minVolume);
+
+
+    try {
+      await sound.setVolumeAsync(volume);
+    } catch (error) {
+      console.error(`Error setting volume for ${type}:`, error);
+    }
+
 
     try {
       await sound.replayAsync();
@@ -96,6 +113,128 @@ class AudioManager {
     this.loopTimeouts.forEach((timeout) => clearTimeout(timeout));
     this.loopTimeouts.clear();
   };
+
+
+
+  loadBeachSounds = async () => {
+    // Cargar sonidos de beachHours (horas 1 a 12)
+    for (let i = 1; i <= 12; i++) {
+      const key = `hour_${i}` as keyof typeof SOUNDS.beachHours;
+      try {
+        const { sound } = await Audio.Sound.createAsync(SOUNDS.beachHours[key]);
+        this.beachHourSounds.set(i, sound);
+      } catch (error) {
+        console.error(`Error loading beach hour sound ${i}:`, error);
+      }
+    }
+    // Cargar sonidos de distancias (5, 10, 25, 50, 100, 150, 200)
+    const distanceKeys = [5, 10, 25, 50, 100, 150, 200];
+    for (const d of distanceKeys) {
+      const key = `distance_${d}` as keyof typeof SOUNDS.distances;
+      try {
+        const { sound } = await Audio.Sound.createAsync(SOUNDS.distances[key]);
+        this.distanceSounds.set(d, sound);
+      } catch (error) {
+        console.error(`Error loading distance sound ${d}:`, error);
+      }
+    }
+  };
+
+  // Función auxiliar para calcular el bearing entre dos puntos
+  calculateBearing(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const toRad = (deg: number) => deg * Math.PI / 180;
+    const toDeg = (rad: number) => rad * 180 / Math.PI;
+    const lat_1 = toRad(lat1);
+    const lat_2 = toRad(lat2);
+    const dif = toRad(lon2 - lon1);
+    const y = Math.sin(dif) * Math.cos(lat_2);
+    const x = Math.cos(lat_1) * Math.sin(lat_2) - Math.sin(lat_1) * Math.cos(lat_2) * Math.cos(dif);
+    const angle = Math.atan2(y, x);
+    return (toDeg(angle) + 360) % 360;
+  }
+
+  // Función auxiliar para calcular la distancia (fórmula de Haversine)
+  getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371e3; // Radio de la Tierra en metros
+    const toRad = (deg: number) => deg * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  /**
+   * Reproduce la indicación auditiva para "vuelta a playa".
+   * Calcula el reloj (1-12) según el ángulo relativo entre la dirección al marcador de playa y el heading del barco,
+   * y determina la pista de distancia adecuada según la separación.
+   * Se reproducen secuencialmente: primero la pista de orientación y, tras un breve retraso, la pista de distancia.
+   */
+  scheduleBeachSignal = async (
+    beachMarker: { latitude: number; longitude: number },
+    boatLocation: { latitude: number; longitude: number },
+    boatHeading: number
+  ) => {
+    // Calcular el bearing (dirección absoluta) desde el barco hacia la playa
+    if(this.isBeachSignalPlaying) return;
+    this.isBeachSignalPlaying = true;
+    const bearing = this.calculateBearing(
+      boatLocation.latitude,
+      boatLocation.longitude,
+      beachMarker.latitude,
+      beachMarker.longitude
+    );
+    // Calcular el ángulo relativo (diferencia entre el bearing y el heading del barco)
+    const relativeAngle = (bearing - boatHeading + 360) % 360;
+    // Convertir a "hora": se divide 360° en 12 sectores de 30° cada uno.
+    // Usamos un offset de 15° para centrar cada sector.
+    let clockHour = Math.floor((relativeAngle + 15) / 30) % 12;
+    if (clockHour === 0) clockHour = 12;
+
+    // Calcular la distancia en metros
+    const distance = this.getDistance(
+      boatLocation.latitude,
+      boatLocation.longitude,
+      beachMarker.latitude,
+      beachMarker.longitude
+    );
+
+    // Seleccionar la pista de distancia según umbrales (puedes ajustar estos valores)
+    let distanceKey: number;
+    if (distance < 7.5) distanceKey = 5;
+    else if (distance < 17.5) distanceKey = 10;
+    else if (distance < 37.5) distanceKey = 25;
+    else if (distance < 75) distanceKey = 50;
+    else if (distance < 125) distanceKey = 100;
+    else if (distance < 175) distanceKey = 150;
+    else distanceKey = 200;
+
+    // Reproducir la pista de orientación (beach hour)
+    const hourSound = this.beachHourSounds.get(clockHour);
+    if (hourSound) {
+      try {
+        await hourSound.replayAsync();
+      } catch (error) {
+        console.error(`Error playing beach hour sound ${clockHour}:`, error);
+      }
+    }
+
+    // Tras un retraso (por ejemplo, 1 segundo) reproducir la pista de distancia
+    setTimeout(async () => {
+      const distSound = this.distanceSounds.get(distanceKey);
+      if (distSound) {
+        try {
+          await distSound.replayAsync();
+        } catch (error) {
+          console.error(`Error playing distance sound ${distanceKey}:`, error);
+        }
+      }
+      setTimeout(() => {
+        this.isBeachSignalPlaying = false;
+      }, 5000);
+    }, 1000);
+  };
 }
+
 
 export const audioManager = new AudioManager();
