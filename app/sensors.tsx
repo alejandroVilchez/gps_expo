@@ -1,8 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useContext } from 'react';
 import { DeviceMotion, Magnetometer } from 'expo-sensors';
 import { Audio } from 'expo-av';
+import { TrackingContext } from '../contexts/TrackingContext';
 
 const useSensors = () => {
+
+   const { trackingActive, trackingTimeLeft } = useContext(TrackingContext);
+  
+
   const [roll, setRoll] = useState(0);
   const [pitch, setPitch] = useState(0);
   const [yaw, setYaw] = useState(0);
@@ -89,6 +94,7 @@ const useSensors = () => {
 
   // Control de sonido
   useEffect(() => {
+
     const interval = setInterval(() => {
       const currentAngle = lastAngle.current;
       const currentTime = Date.now();
@@ -100,18 +106,19 @@ const useSensors = () => {
         );
         //const intervalDuration = MAX_INTERVAL - (MAX_INTERVAL - MIN_INTERVAL) * Math.pow(normalized, 2); // Curva cuadrática
         const intervalDuration = MAX_INTERVAL - (MAX_INTERVAL - MIN_INTERVAL) * normalized; // Lineal
-
-        if (currentTime - lastPlayTime.current >= intervalDuration) {
-          isPlaying.current = true;
-          soundRef.current.replayAsync()
-            .then(() => {
-              lastPlayTime.current = Date.now();
-              isPlaying.current = false;
-            })
-            .catch(() => {
-              isPlaying.current = false;
-            });
-        }
+        
+          if (currentTime - lastPlayTime.current >= intervalDuration) {
+            isPlaying.current = true;
+            soundRef.current.replayAsync()
+              .then(() => {
+                lastPlayTime.current = Date.now();
+                isPlaying.current = false;
+              })
+              .catch(() => {
+                isPlaying.current = false;
+              });
+          }
+        
       }
     }, 50); // Verificación cada 50ms para mayor respuesta
 

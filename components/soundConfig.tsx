@@ -26,4 +26,18 @@ export const SOUNDS = {
       distance_150: require('../assets/sound/distance/distance_150.wav'),
       distance_200: require('../assets/sound/distance/distance_200.wav'),
     },
+    northHours: {
+      hour_1: require('../assets/sound/north_hour/north_hour_1.wav'),
+      hour_2: require('../assets/sound/north_hour/north_hour_2.wav'),
+      hour_3: require('../assets/sound/north_hour/north_hour_3.wav'),
+      hour_4: require('../assets/sound/north_hour/north_hour_4.wav'),
+      hour_5: require('../assets/sound/north_hour/north_hour_5.wav'),
+      hour_6: require('../assets/sound/north_hour/north_hour_6.wav'),
+      hour_7: require('../assets/sound/north_hour/north_hour_7.wav'),
+      hour_8: require('../assets/sound/north_hour/north_hour_8.wav'),
+      hour_9: require('../assets/sound/north_hour/north_hour_9.wav'),
+      hour_10: require('../assets/sound/north_hour/north_hour_10.wav'),
+      hour_11: require('../assets/sound/north_hour/north_hour_11.wav'),
+      hour_12: require('../assets/sound/north_hour/north_hour_12.wav'),
+    },
   };

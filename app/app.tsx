@@ -1,8 +1,10 @@
-import { View, StyleSheet, Alert, Text } from 'react-native';
+import { View, StyleSheet, Alert, Text, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { PaperProvider, Button, Card, Title  } from 'react-native-paper';
 import {AuthContext} from '../contexts/AuthContext';
-import React, {useContext, useState} from 'react';
+import { TrackingContext } from '../contexts/TrackingContext';
+
+import React, {useContext, useState, useEffect} from 'react';
 import useSensors from './sensors';
 
 export default function App() {
@@ -10,29 +12,45 @@ export default function App() {
   const router = useRouter();
   const { user } = useContext(AuthContext);
   // Estado para determinar si el tracking está activo
-  const [trackingActive, setTrackingActive] = useState(false);
+  // const [trackingActive, setTrackingActive] = useState(false);
+  // const [trackingTimeLeft, setTrackingTimeLeft] = useState(0); // Tiempo restante en segundos
+  //const { trackingActive, trackingTimeLeft, setTrackingActive, setTrackingTimeLeft } = useContext(TrackingContext);
+  const { startTracking, resetTracking, trackingActive, trackingTimeLeft } = useContext(TrackingContext);
+
+
   const [switchUserMode, setSwitchUserMode] = useState(false);
 
   const { roll, pitch, yaw, calibrateNorth  } = useSensors();
 
 
   const toggleSwitchUserMode = () => setSwitchUserMode(!switchUserMode);
-  const toggleTracking = () => {
-    if (!trackingActive) {
-      startTracking();
-    } else {
-      stopTracking();
-    }
-    setTrackingActive(!trackingActive);
-  };
   
-  const startTracking = () => {
-    console.log("Tracking iniciado");
-  };
+  // useEffect(() => {
+  //   let timer: NodeJS.Timeout;
+  //   if (trackingActive && trackingTimeLeft > 0) {
+  //     timer = setInterval(() => {
+  //       setTrackingTimeLeft((prev) => {
+  //         if (prev <= 1) {
+  //           clearInterval(timer);
+  //           setTrackingActive(false);
+  //           return 0;
+  //         }
+  //         return prev - 1;
+  //       });
+  //     }, 1000);
+  //   }
+  //   return () => clearInterval(timer);
+  // }, [trackingActive, trackingTimeLeft]);
+
+  // const startTracking = () => {
+  //   setTrackingActive(true);
+  //   setTrackingTimeLeft(3600); // 1 hora en segundos
+  // };
+  // const resetTracking = () => {
+  //   setTrackingActive(false);
+  //   setTrackingTimeLeft(0);
+  // };
   
-  const stopTracking = () => {
-    console.log("Tracking detenido");
-  };
   
   // Función para manejar el acceso a funcionalidades restringidas
   const handleRestrictedAccess = (ruta: string) => {
@@ -57,7 +75,7 @@ export default function App() {
   if (!user || !switchUserMode) {
     return (
       <View style={styles.container}>
-          <Text style={styles.title}>Bienvenido a la App</Text>
+          <Text style={styles.title}>Bienvenido a Solo Sailing! </Text>
           <View style={styles.switchContainer}>
               <Button mode="contained" onPress={toggleSwitchUserMode} style={{backgroundColor: "#007AFF"}}>Cambiar menú ( ͡° ͜ʖ ͡°)</Button>
           </View>
@@ -118,20 +136,25 @@ export default function App() {
             
             <Button
                 mode="contained"
-                onPress={toggleTracking}
-                style={[styles.button, { backgroundColor: "#007AFF" }]}
+                onPress={!trackingActive? startTracking : resetTracking}
+                // onPress={startTracking}
+                //disabled={trackingActive}
+                style={[styles.button, { backgroundColor:trackingActive?"green": "grey" }]}
                 contentStyle={styles.buttonContent}
                 labelStyle={styles.buttonLabel}
                 >
-                {trackingActive ? "Detener Tracking" : "Iniciar Tracking"}
+                {trackingActive ? `Tracking Activo ` : "Iniciar Tracking"}
             </Button>
+                       
             <Button
                 mode="contained"
                 icon="map"
-                style={[styles.button, { backgroundColor: "#007AFF" }]}
+                // style={[styles.button, { backgroundColor: "#007AFF" }]}
                 contentStyle={styles.buttonContent}
                 labelStyle={styles.buttonLabel}
-                onPress={() => router.push('./mapScreen')}
+                style={[styles.button, { backgroundColor: trackingActive ? "#007AFF" : "grey" }]}
+                onPress={() => trackingActive ? router.push('./mapScreen') : Alert.alert("Debes iniciar el tracking")}
+                // disabled={!trackingActive}                
                 >
                 Ver mapa
             </Button>
@@ -158,12 +181,17 @@ export default function App() {
                 >
                 Configuración de navegación
             </Button>
+            {trackingActive && (
+
+            
             <View style={styles.infoContainer}>
-              <Button mode="contained" onPress={calibrateNorth} style={{backgroundColor: "#007AFF"}}>Calibrar Norte</Button>
+              {/* <Button mode="contained" onPress={calibrateNorth} style={{backgroundColor: "#007AFF"}}>Calibrar Norte</Button> */}
+              <Text style={styles.infoText}>Tiempo restante de tracking: {Math.floor(trackingTimeLeft / 60)}:{trackingTimeLeft % 60}</Text>
               <Text style={styles.infoText}>Inclinación actual: {roll.toFixed(1)}°</Text>
               <Text style={styles.infoText}>Orientación actual: {yaw?.toFixed(1)}º</Text>
 
             </View>
+            )}
         </View>
         
     );

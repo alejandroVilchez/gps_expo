@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { Text, View, StyleSheet, Alert } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button, Dialog, Portal, RadioButton } from "react-native-paper";
-
+import { useRouter } from 'expo-router';
 import useSensors from './sensors'; 
 import {audioManager} from '../components/audioManager';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { TrackingContext } from '../contexts/TrackingContext';
 
 
 
@@ -20,10 +20,22 @@ const OBSTACLE_TYPES = {
 
 
 export default function MapScreen() {
+  
+  const { trackingActive, trackingTimeLeft } = useContext(TrackingContext);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (trackingTimeLeft <= 0) {
+      Alert.alert("Acceso restringido", "Debes iniciar el tracking para ver el mapa");
+      router.push('./'); // Redirige al inicio si no está activo
+    }
+  }, [trackingTimeLeft]);
+  
+  
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [region, setRegion] = useState<Region | null>(null);
 
-  const [heading, setHeading] = useState<number | null>(null);
+  //const [heading, setHeading] = useState<number | null>(null);
   
   const { roll, pitch, yaw, calibrateNorth  } = useSensors();
   
@@ -35,11 +47,15 @@ export default function MapScreen() {
   const [newMarker, setNewMarker] = useState<{ latitude: number; longitude: number } | null>(null);
   
 
-  const { scheduleObstacleAlert, stopObstacleAlert, loadAllSounds, loadBeachSounds, scheduleBeachSignal } = audioManager;
+  const { scheduleObstacleAlert, stopObstacleAlert, loadAllSounds, loadBeachSounds, scheduleBeachSignal, loadNorthSounds, scheduleNorthSignal } = audioManager;
   const [beachSignalActive, setBeachSignalActive] = useState(false);
+  const [northSignalActive, setNorthSignalActive] = useState(false);
 
   const toggleBeachSignal = () => {
     setBeachSignalActive(!beachSignalActive);
+  }
+  const toggleNorthSignal = () => {
+    setNorthSignalActive(!northSignalActive);
   }
 
   useEffect(() => {
@@ -49,6 +65,11 @@ export default function MapScreen() {
   useEffect(() => {
     loadBeachSounds();
   }, []);
+
+  useEffect(() => {
+    loadNorthSounds();
+  }
+  , []);
   
 
   // Cargar marcadores guardados al iniciar
@@ -241,7 +262,15 @@ export default function MapScreen() {
       } 
     }
   }, [beachSignalActive, location, markers, yaw]);
- 
+  
+  useEffect(() => {
+    if (northSignalActive) {
+      scheduleNorthSignal(
+        { latitude: location?.coords.latitude || 0, longitude: location?.coords.longitude || 0 },
+        yaw || 0
+      );
+    }
+  }, [northSignalActive, location, yaw]);
 
   return (
     <View style={styles.container}>
@@ -295,10 +324,12 @@ export default function MapScreen() {
         <Button mode="contained" onPress={calibrateNorth} style={{backgroundColor: "#007AFF"}}>Calibrar Norte</Button>
         <Text style={styles.infoText}>Inclinación actual: {roll.toFixed(1)}°</Text>
         <Text style={styles.infoText}>Orientación actual: {yaw?.toFixed(1)}º</Text>
+        <Text style={styles.infoText}>Tiempo restante: {Math.floor(trackingTimeLeft / 60)}:{trackingTimeLeft % 60} </Text>
 
       </View>
       <View style={styles.switchContainer}>
-        <Button mode="contained" onPress={toggleBeachSignal} style={{backgroundColor: "#007AFF"}}>Señal Playa</Button>
+        <Button mode="contained" onPress={toggleBeachSignal} style={{backgroundColor:beachSignalActive? "#007AFF": "grey"}}>Señal Playa</Button>
+        <Button mode="contained" onPress={toggleNorthSignal} style={{backgroundColor:northSignalActive? "#007AFF": "grey"}}>Señal Norte</Button>
       </View>
     </View>
   );
@@ -323,5 +354,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
     padding: 10,
     borderRadius: 8,
+    gap: 10,
   },
 });

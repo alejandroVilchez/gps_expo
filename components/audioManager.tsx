@@ -26,7 +26,11 @@ class AudioManager {
   private beachHourSounds: Map<number, Audio.Sound> = new Map();
   private distanceSounds: Map<number, Audio.Sound> = new Map();
 
+  private northHourSounds: Map<number, Audio.Sound> = new Map();
+
+  // Flag para evitar solapamiento de señales
   private isBeachSignalPlaying: boolean = false;
+  private isNorthSignalPlaying: boolean = false;
 
   // Convertimos a arrow function para mantener el contexto de 'this'
   loadAllSounds = async () => {
@@ -140,15 +144,27 @@ class AudioManager {
     }
   };
 
+  loadNorthSounds = async () => {
+    for (let i = 1; i <= 12; i++) {
+      const key = `hour_${i}` as keyof typeof SOUNDS.northHours;
+      try {
+        const { sound } = await Audio.Sound.createAsync(SOUNDS.northHours[key]);
+        this.northHourSounds.set(i, sound);
+      } catch (error) {
+        console.error(`Error loading north hour sound ${i}:`, error);
+      }
+    }
+  };
+
   // Función auxiliar para calcular el bearing entre dos puntos
   calculateBearing(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const toRad = (deg: number) => deg * Math.PI / 180;
     const toDeg = (rad: number) => rad * 180 / Math.PI;
     const lat_1 = toRad(lat1);
     const lat_2 = toRad(lat2);
-    const dif = toRad(lon2 - lon1);
-    const y = Math.sin(dif) * Math.cos(lat_2);
-    const x = Math.cos(lat_1) * Math.sin(lat_2) - Math.sin(lat_1) * Math.cos(lat_2) * Math.cos(dif);
+    const dLon = toRad(lon2 - lon1);
+    const y = Math.sin(dLon) * Math.cos(lat_2);
+    const x = Math.cos(lat_1) * Math.sin(lat_2) - Math.sin(lat_1) * Math.cos(lat_2) * Math.cos(dLon);
     const angle = Math.atan2(y, x);
     return (toDeg(angle) + 360) % 360;
   }
@@ -232,7 +248,34 @@ class AudioManager {
       setTimeout(() => {
         this.isBeachSignalPlaying = false;
       }, 5000);
-    }, 1000);
+    }, 2000);
+  };
+
+  scheduleNorthSignal = async (
+    boatLocation: { latitude: number; longitude: number },
+    boatHeading: number
+  ) => {
+    if (this.isNorthSignalPlaying) return;
+    this.isNorthSignalPlaying = true;
+
+    // Para dirección norte, la referencia es 0°
+    // Calculamos el ángulo relativo entre el heading del barco y el norte:
+    const relativeAngle = (0 - boatHeading + 360) % 360;
+    let clockHour = Math.floor((relativeAngle + 15) / 30) % 12;
+    if (clockHour === 0) clockHour = 12;
+
+    // Reproducir la pista de orientación (north hour)
+    const northSound = this.northHourSounds.get(clockHour);
+    if (northSound) {
+      try {
+        await northSound.replayAsync();
+      } catch (error) {
+        console.error(`Error playing north hour sound ${clockHour}:`, error);
+      }
+    }
+    setTimeout(() => {
+      this.isNorthSignalPlaying = false;
+    }, 5000);
   };
 }
 
