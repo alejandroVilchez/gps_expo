@@ -148,15 +148,23 @@ export default function App() {
             <Button
                 mode="contained"
                 icon="map-marker"
-                // style={[styles.button, { backgroundColor: "#007AFF" }]}
                 contentStyle={styles.buttonContent}
                 labelStyle={styles.buttonLabel}
                 style={[styles.button, { backgroundColor: "#007AFF" }]}
-                onPress={() => router.push('./gpsReceiver')}
-                // disabled={!trackingActive}                
+                onPress={() => router.push('./gpsSimulator/gpsReceiver')}
                 >
                 Recibir datos GPS
-            </Button>           
+            </Button>
+            <Button
+                mode="contained"
+                icon="map"
+                contentStyle={styles.buttonContent}
+                labelStyle={styles.buttonLabel}
+                style={[styles.button, { backgroundColor: "#007AFF" }]}
+                onPress={() => router.push('./gpsSimulator/pastRegattas')}
+                >
+                Regatas pasadas
+            </Button>                    
             <Button
                 mode="contained"
                 icon="map"
