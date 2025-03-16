@@ -1,4 +1,3 @@
-// audioManager.ts
 import { Audio } from 'expo-av';
 import { SOUNDS } from './soundConfig'
 
@@ -180,12 +179,7 @@ class AudioManager {
     return R * c;
   }
 
-  /**
-   * Reproduce la indicación auditiva para "vuelta a playa".
-   * Calcula el reloj (1-12) según el ángulo relativo entre la dirección al marcador de playa y el heading del barco,
-   * y determina la pista de distancia adecuada según la separación.
-   * Se reproducen secuencialmente: primero la pista de orientación y, tras un breve retraso, la pista de distancia.
-   */
+  
   scheduleBeachSignal = async (
     beachMarker: { latitude: number; longitude: number },
     boatLocation: { latitude: number; longitude: number },
@@ -207,7 +201,6 @@ class AudioManager {
     let clockHour = Math.floor((relativeAngle + 15) / 30) % 12;
     if (clockHour === 0) clockHour = 12;
 
-    // Calcular la distancia en metros
     const distance = this.getDistance(
       boatLocation.latitude,
       boatLocation.longitude,
@@ -215,7 +208,6 @@ class AudioManager {
       beachMarker.longitude
     );
 
-    // Seleccionar la pista de distancia según umbrales (puedes ajustar estos valores)
     let distanceKey: number;
     if (distance < 7.5) distanceKey = 5;
     else if (distance < 17.5) distanceKey = 10;
@@ -235,7 +227,6 @@ class AudioManager {
       }
     }
 
-    // Tras un retraso (por ejemplo, 1 segundo) reproducir la pista de distancia
     setTimeout(async () => {
       const distSound = this.distanceSounds.get(distanceKey);
       if (distSound) {

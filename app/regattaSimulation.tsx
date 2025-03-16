@@ -70,11 +70,8 @@ export default function RegattaSimulation() {
   }, []);
 
 
-  //const [simulationDelay, setSimulationDelay] = useState(1000);
-
-  // Intervalo que actualiza la posición del barco cada segundo (ajustable).
   const startSimulation = () => {
-    if (isRunning) return; // Evita múltiples intervalos
+    if (isRunning) return;
     setIsRunning(true);
     intervalRef.current = setInterval(() => {
       setCurrentIndex(prevIndex => {
@@ -152,18 +149,18 @@ export default function RegattaSimulation() {
       const OBSTACLE_THRESHOLD = 100; // 
 
       if (closestBuoy && minDist < OBSTACLE_THRESHOLD) {
-        // Si la boya es la de inicio/fin (por ejemplo, name === "1"), usar señal playa
-        if (closestBuoy.name === '1') {
-          // Llamamos a scheduleBeachSignal
-          audioManager.scheduleBeachSignal(
-            { latitude: closestBuoy.lat, longitude: closestBuoy.lng },
-            currentPosition,
-            simulatedHeading
-          );
-        } else {
+        
+        // if (closestBuoy.name === '1') {
+        //   // Llamamos a scheduleBeachSignal
+        //   audioManager.scheduleBeachSignal(
+        //     { latitude: closestBuoy.lat, longitude: closestBuoy.lng },
+        //     currentPosition,
+        //     simulatedHeading
+        //   );
+        // } else {
           // Para otras boyas, usamos la señal de obstáculo (tipo 'buoy')
           audioManager.scheduleObstacleAlert('buoy', minDist);
-        }
+        // }
       } else {
         // No hay boya en cercanía: detener señal obstáculo
         audioManager.stopObstacleAlert('buoy');

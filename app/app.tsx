@@ -145,7 +145,18 @@ export default function App() {
                 >
                 {trackingActive ? `Tracking Activo ` : "Iniciar Tracking"}
             </Button>
-                       
+            <Button
+                mode="contained"
+                icon="map-marker"
+                // style={[styles.button, { backgroundColor: "#007AFF" }]}
+                contentStyle={styles.buttonContent}
+                labelStyle={styles.buttonLabel}
+                style={[styles.button, { backgroundColor: "#007AFF" }]}
+                onPress={() => router.push('./gpsReceiver')}
+                // disabled={!trackingActive}                
+                >
+                Recibir datos GPS
+            </Button>           
             <Button
                 mode="contained"
                 icon="map"
