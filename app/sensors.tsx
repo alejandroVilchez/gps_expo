@@ -23,6 +23,9 @@ const useSensors = () => {
   const lastUpdateRef = useRef<number>(0);
   const yawAccumulated = useRef(0);
   const smoothedYaw = useRef(0);
+
+  const initialYaw = useRef<number | null>(null);
+
   // Configuración
   const MIN_ANGLE = 10;
   const MAX_ANGLE = 40;
@@ -47,7 +50,7 @@ const useSensors = () => {
   useEffect(() => {
     let smoothedRoll = 0;
     let smoothedPitch = 0;
-    //let smoothedYaw = 0;
+    
     
     const sub = DeviceMotion.addListener(({ accelerationIncludingGravity, rotationRate }) => {
       if (!accelerationIncludingGravity || !rotationRate) return;
@@ -66,6 +69,38 @@ const useSensors = () => {
       setRoll(Math.abs(smoothedRoll));
       lastAngle.current = Math.abs(smoothedRoll);
 
+      if (initialYaw.current !== null) {
+        const currentTime = Date.now();
+        const dt = lastUpdateRef.current ? (currentTime - lastUpdateRef.current) / 1000 : 0;
+        lastUpdateRef.current = currentTime;
+        // Integración de la velocidad angular (gamma)
+        yawAccumulated.current += -rotationRate.gamma * dt;
+        // Combinar la referencia inicial y la acumulación de giro
+        let computedYaw = (initialYaw.current + yawAccumulated.current) % 360;
+        computedYaw = (computedYaw + 360) % 360;
+        // Suavizado para evitar saltos bruscos
+        smoothedYaw.current = smoothedYaw.current * (1 - SMOOTHING) + computedYaw * SMOOTHING;
+        // Aplicar calibración si existe
+        let adjustedYaw = smoothedYaw.current;
+        if (calibrationOffset !== null) {
+          adjustedYaw = ((smoothedYaw.current - calibrationOffset) % 360 + 360) % 360;
+        }
+        setYaw(adjustedYaw);
+      }
+    });
+
+    // Sensor de magnetómetro: se usa para fijar la orientación inicial
+    const magnetoSub = Magnetometer.addListener((data) => {
+      if (!data) return;
+      // Solo establecer la referencia inicial una vez
+      if (initialYaw.current === null) {
+        const { x, y } = data;
+        let magnetoYaw = Math.atan2(y, x) * (180 / Math.PI);
+        magnetoYaw = (magnetoYaw + 360) % 360;
+        initialYaw.current = magnetoYaw;
+        setMagnetometer(magnetoYaw);
+      }
+    });
 
       // if(rotationRate && typeof rotationRate.gamma === 'number'){
       //   const currentTime = Date.now();
@@ -84,28 +119,28 @@ const useSensors = () => {
 
       // }
       
-    });
+    // });
 
-    const magnetoSub = Magnetometer.addListener((data) => {
-      if (!data) return;
-      let { x, y } = data;
-      let magnetoYaw = Math.atan2(y, x) * (180 / Math.PI);
-      magnetoYaw = (magnetoYaw + 360) % 360; 
-      smoothedYaw.current = smoothedYaw.current * (1 - SMOOTHING) + magnetoYaw * SMOOTHING;
-      let adjustedYaw = smoothedYaw.current;
-      if (calibrationOffset !== null) {
-        adjustedYaw = ((smoothedYaw.current - calibrationOffset) % 360 + 360) % 360;
-      }
-      setMagnetometer(adjustedYaw);
-      magnetometer - 90 >=0 ? setYaw(adjustedYaw - 90) : setYaw(adjustedYaw + 271);
-    });
+    // const magnetoSub = Magnetometer.addListener((data) => {
+    //   if (!data) return;
+    //   let { x, y } = data;
+    //   let magnetoYaw = Math.atan2(y, x) * (180 / Math.PI);
+    //   magnetoYaw = (magnetoYaw + 360) % 360; 
+    //   smoothedYaw.current = smoothedYaw.current * (1 - SMOOTHING) + magnetoYaw * SMOOTHING;
+    //   let adjustedYaw = smoothedYaw.current;
+    //   if (calibrationOffset !== null) {
+    //     adjustedYaw = ((smoothedYaw.current - calibrationOffset) % 360 + 360) % 360;
+    //   }
+    //   setMagnetometer(adjustedYaw);
+    //   magnetometer - 90 >=0 ? setYaw(adjustedYaw - 90) : setYaw(adjustedYaw + 271);
+    // });
     
     return () => 
       { 
       sub.remove();
       magnetoSub.remove();
     }
-  }, [calibrationOffset]);
+  }, [calibrationOffset]); //[]);//
 
 
   const calibrateNorth = () => {

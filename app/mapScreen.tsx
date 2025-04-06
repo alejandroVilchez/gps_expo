@@ -280,9 +280,10 @@ export default function MapScreen() {
             <Marker
               coordinate={{ latitude: location.coords.latitude, longitude: location.coords.longitude }}
               title="Tu ubicación"
-              description={`Dirección: ${magnetometer ? magnetometer.toFixed(1) + '°' : 'N/A'}`}
+              description={`Dirección: ${yaw ? yaw.toFixed(1) + '°' : 'N/A'}`}
+              //description={`Dirección: ${magnetometer ? magnetometer.toFixed(1) + '°' : 'N/A'}`}
               anchor={{ x: 0.5, y: 0.5 }}
-              rotation={magnetometer || 0}
+              rotation={yaw || 0}
               icon={require('../assets/images/directionIcon.png')}
             />
 
@@ -323,7 +324,7 @@ export default function MapScreen() {
       <View style={styles.infoContainer}>
         <Button mode="contained" onPress={calibrateNorth} style={{backgroundColor: "#007AFF"}}>Calibrar Norte</Button>
         <Text style={styles.infoText}>Inclinación actual: {roll.toFixed(1)}°</Text>
-        <Text style={styles.infoText}>Orientación actual: {magnetometer?.toFixed(1)}º</Text>
+        <Text style={styles.infoText}>Orientación actual: {yaw?.toFixed(1)}º</Text>
         <Text style={styles.infoText}>Tiempo restante: {Math.floor(trackingTimeLeft / 60)}:{trackingTimeLeft % 60} </Text>
 
       </View>
