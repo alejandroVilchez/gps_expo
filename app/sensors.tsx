@@ -11,7 +11,7 @@ const useSensors = () => {
   const [roll, setRoll] = useState(0);
   const [pitch, setPitch] = useState(0);
   const [yaw, setYaw] = useState(0);
-
+  const [magnetometer, setMagnetometer] = useState(0);
   const [calibrationOffset, setCalibrationOffset] = useState<number | null>(null);
 
   
@@ -67,26 +67,46 @@ const useSensors = () => {
       lastAngle.current = Math.abs(smoothedRoll);
 
 
-      if(rotationRate && typeof rotationRate.gamma === 'number'){
-        const currentTime = Date.now();
-        if(lastUpdateRef.current !== null){
-          const dt = (currentTime - lastUpdateRef.current) /1000;
-          yawAccumulated.current += -rotationRate.gamma * dt;
-          yawAccumulated.current = ((yawAccumulated.current % 360) +360 ) % 360;
-          smoothedYaw.current = smoothedYaw.current * (1-SMOOTHING) + yawAccumulated.current * SMOOTHING;
-          let adjustedYaw = smoothedYaw.current;
-          if(calibrationOffset !== null){
-            adjustedYaw = ((smoothedYaw.current - calibrationOffset)%360 + 360) % 360;
-          }
-          setYaw(adjustedYaw);
-        }
-        lastUpdateRef.current = currentTime;
+      // if(rotationRate && typeof rotationRate.gamma === 'number'){
+      //   const currentTime = Date.now();
+      //   if(lastUpdateRef.current !== null){
+      //     const dt = (currentTime - lastUpdateRef.current) /1000;
+      //     yawAccumulated.current += -rotationRate.gamma * dt;
+      //     yawAccumulated.current = ((yawAccumulated.current % 360) +360 ) % 360;
+      //     smoothedYaw.current = smoothedYaw.current * (1-SMOOTHING) + yawAccumulated.current * SMOOTHING;
+      //     let adjustedYaw = smoothedYaw.current;
+      //     if(calibrationOffset !== null){
+      //       adjustedYaw = ((smoothedYaw.current - calibrationOffset)%360 + 360) % 360;
+      //     }
+      //     setYaw(adjustedYaw);
+      //   }
+      //   lastUpdateRef.current = currentTime;
 
+      // }
+      
+    });
+
+    const magnetoSub = Magnetometer.addListener((data) => {
+      if (!data) return;
+      let { x, y } = data;
+      let magnetoYaw = Math.atan2(y, x) * (180 / Math.PI);
+      magnetoYaw = (magnetoYaw + 360) % 360; 
+      smoothedYaw.current = smoothedYaw.current * (1 - SMOOTHING) + magnetoYaw * SMOOTHING;
+      let adjustedYaw = smoothedYaw.current;
+      if (calibrationOffset !== null) {
+        adjustedYaw = ((smoothedYaw.current - calibrationOffset) % 360 + 360) % 360;
       }
-    }, );
-
-    return () => sub.remove();
+      setMagnetometer(adjustedYaw);
+      magnetometer - 90 >=0 ? setYaw(adjustedYaw - 90) : setYaw(adjustedYaw + 271);
+    });
+    
+    return () => 
+      { 
+      sub.remove();
+      magnetoSub.remove();
+    }
   }, [calibrationOffset]);
+
 
   const calibrateNorth = () => {
     setCalibrationOffset(smoothedYaw.current);
@@ -125,7 +145,7 @@ const useSensors = () => {
     return () => clearInterval(interval);
   }, []);
 
-  return { roll, pitch, yaw, calibrateNorth };
+  return { roll, pitch, yaw, calibrateNorth, magnetometer };
 };
 
 export default useSensors;

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 
-const WEBSOCKET_URL = "ws://192.168.1.12:8080"; // Reemplázalo con tu IP o dominio
+const WEBSOCKET_URL = "wss://backend-production-f962.up.railway.app/gps/regattas";
+
 
 export default function GPSReceiver() {
 

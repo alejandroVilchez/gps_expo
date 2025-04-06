@@ -145,7 +145,7 @@ export default function App() {
                 >
                 {trackingActive ? `Tracking Activo ` : "Iniciar Tracking"}
             </Button>
-            <Button
+            {/* <Button
                 mode="contained"
                 icon="map-marker"
                 contentStyle={styles.buttonContent}
@@ -164,7 +164,7 @@ export default function App() {
                 onPress={() => router.push('./gpsSimulator/pastRegattas')}
                 >
                 Regatas pasadas
-            </Button>                    
+            </Button>                     */}
             <Button
                 mode="contained"
                 icon="map"
